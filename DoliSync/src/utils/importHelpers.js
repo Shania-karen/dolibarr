@@ -290,11 +290,20 @@ export async function importRow(resourceType, row, mapping, context = {}) {
 
     payload.fk_user = fk_user;
     payload.amount = parseNumber(getVal('amount'));
+    
+    // Add required label field
+    payload.label = getVal('label') || `Salaire réf ${getVal('eref_salaire') || 'N/A'}`;
+
+    const toTimestamp = (dateStr) => {
+      if (!dateStr) return null;
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? null : Math.floor(d.getTime() / 1000);
+    };
 
     const dateStart = parseCSVDate(getVal('date_debut'));
     const dateEnd = parseCSVDate(getVal('date_fin'));
-    if (dateStart) payload.datesp = dateStart;
-    if (dateEnd) payload.dateep = dateEnd;
+    if (dateStart) payload.datesp = toTimestamp(dateStart);
+    if (dateEnd) payload.dateep = toTimestamp(dateEnd);
 
     // Parse payments
     const rawPayments = getVal('paiement');
@@ -304,12 +313,12 @@ export async function importRow(resourceType, row, mapping, context = {}) {
       // Use the first payment date as the salary payment date, or date_fin if unavailable
       const payDate = parseCSVDate(payments[0].date);
       if (payDate) {
-        payload.datep = payDate;
+        payload.datep = toTimestamp(payDate);
       }
     }
     
     if (!payload.datep && dateEnd) {
-      payload.datep = dateEnd;
+      payload.datep = toTimestamp(dateEnd);
     }
 
     // Store payments details and salary ref in note_private

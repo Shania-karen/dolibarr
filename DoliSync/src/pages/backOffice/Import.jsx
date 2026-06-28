@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
 import { 
   parseCSV, 
-  importRow 
+  importRow,
+  findUserByRef
 } from '../../utils/importHelpers';
 import { fetchDolData } from '../../services/apiClient';
 import { 
@@ -38,6 +39,7 @@ export default function ImportPage() {
 
   const empInputRef = useRef(null);
   const salInputRef = useRef(null);
+  const shouldStopRef = useRef(false);
 
   // Import execution states
   const [isImporting, setIsImporting] = useState(false);
@@ -139,10 +141,17 @@ export default function ImportPage() {
     setLogs(prev => [logEntry, ...prev]);
   };
 
+  const handleStopImport = () => {
+    shouldStopRef.current = true;
+    setShouldStop(true);
+    addLog("Demande d'interruption par l'utilisateur...", "warning");
+  };
+
   const executeDoubleImport = async () => {
     setStep(3);
     setIsImporting(true);
     setShouldStop(false);
+    shouldStopRef.current = false;
     
     setProgress({
       empCurrent: 0,
@@ -157,6 +166,16 @@ export default function ImportPage() {
     setLogs([]);
 
     addLog("Début de l'importation combinée...", "info");
+
+    // Fetch existing users first to avoid duplicate 500 errors and enable reuse
+    let allDolibarrUsers = [];
+    try {
+      addLog("Récupération de la liste complète des utilisateurs de Dolibarr pour recoupement...", "info");
+      const fetched = await fetchDolData('/users?limit=1000');
+      allDolibarrUsers = Array.isArray(fetched) ? fetched : [];
+    } catch (e) {
+      addLog(`Attention : Impossible de lire la liste complète des utilisateurs depuis l'API (${e.message}).`, "warning");
+    }
 
     const createdUsersMap = {}; // Maps ref_employe -> Dolibarr User ID
     const employeeRefMap = {};  // Maps ref_employe -> Login (Identifiant)
@@ -178,7 +197,7 @@ export default function ImportPage() {
     };
 
     for (let i = 0; i < employeesData.length; i++) {
-      if (shouldStop) {
+      if (shouldStopRef.current) {
         addLog("Importation interrompue par l'utilisateur.", "warning");
         setIsImporting(false);
         return;
@@ -190,17 +209,26 @@ export default function ImportPage() {
       const login = row['identifiant'];
 
       try {
-        addLog(`[Employé] Création de '${row['nom']}' (Identifiant: ${login})...`, 'info');
-        const res = await importRow('users', row, empMapping);
-        const newUserId = res.id || res.rowid;
-        
-        if (newUserId) {
-          createdUsersMap[refEmp] = parseInt(newUserId);
+        // Check if user already exists
+        const existingUserId = findUserByRef(allDolibarrUsers, refEmp, login);
+        if (existingUserId) {
+          createdUsersMap[refEmp] = existingUserId;
           employeeRefMap[refEmp] = login;
           empSuccess++;
-          addLog(`[Employé] Ligne ${rowNum} : '${row['nom']}' créé avec succès (ID Dolibarr: ${newUserId})`, 'success');
+          addLog(`[Employé] Ligne ${rowNum} : '${row['nom']}' existe déjà (ID Dolibarr: ${existingUserId}). Liaison effectuée.`, 'success');
         } else {
-          throw new Error("L'API Dolibarr n'a pas retourné d'ID valide.");
+          addLog(`[Employé] Création de '${row['nom']}' (Identifiant: ${login})...`, 'info');
+          const res = await importRow('users', row, empMapping);
+          const newUserId = res.id || res.rowid;
+          
+          if (newUserId) {
+            createdUsersMap[refEmp] = parseInt(newUserId);
+            employeeRefMap[refEmp] = login;
+            empSuccess++;
+            addLog(`[Employé] Ligne ${rowNum} : '${row['nom']}' créé avec succès (ID Dolibarr: ${newUserId})`, 'success');
+          } else {
+            throw new Error("L'API Dolibarr n'a pas retourné d'ID valide.");
+          }
         }
       } catch (err) {
         empFail++;
@@ -216,16 +244,6 @@ export default function ImportPage() {
     }
 
     addLog(`=== FIN PHASE 1 : Employés créés avec succès : ${empSuccess}, Échecs : ${empFail} ===`, "info");
-
-    // Retrieve full Dolibarr users list to merge with already existing users if any
-    let allDolibarrUsers = [];
-    try {
-      addLog("Récupération de la liste complète des utilisateurs de Dolibarr pour recoupement...", "info");
-      const fetched = await fetchDolData('/users?limit=1000');
-      allDolibarrUsers = Array.isArray(fetched) ? fetched : [];
-    } catch (e) {
-      addLog(`Attention : Impossible de lire la liste complète des utilisateurs depuis l'API (${e.message}). La liaison utilisera uniquement les utilisateurs créés lors de cette session.`, "warning");
-    }
 
     // --- PHASE 2 : IMPORT SALARIES ---
     addLog(`=== PHASE 2 : Importation des salaires (${salariesData.length} à traiter) ===`, "info");
@@ -264,7 +282,7 @@ export default function ImportPage() {
     };
 
     for (let i = 0; i < salariesData.length; i++) {
-      if (shouldStop) {
+      if (shouldStopRef.current) {
         addLog("Importation interrompue par l'utilisateur.", "warning");
         break;
       }
