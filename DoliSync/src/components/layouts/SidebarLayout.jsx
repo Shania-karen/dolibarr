@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { HomeIcon, ResetIcon, ImportIcon } from '../templates';
+import { HomeIcon, ResetIcon, ImportIcon , DashboardIcon, MoneyIcon} from '../templates';
 
 export default function SidebarLayout() {
   const [collapsed, setCollapsed] = useState(false);
@@ -9,9 +9,11 @@ export default function SidebarLayout() {
   const isBackOfficeAuth = sessionStorage.getItem('isBackOfficeAuth') === 'true';
 
   const navItems = [
-     { to: '/', label: 'Home', icon: HomeIcon },
-     isBackOfficeAuth && { to: 'backoffice', label: 'Reset', icon: ResetIcon },
-     isBackOfficeAuth && { to: 'backoffice/import', label: 'Import', icon: ImportIcon }
+    { to: '/', label: 'Home', icon: HomeIcon },
+    { to: '/salaires', label: 'Salaires', icon: MoneyIcon },
+    isBackOfficeAuth && { to: 'backoffice', label: 'Reset', icon: ResetIcon },
+    isBackOfficeAuth && { to: 'backoffice/import', label: 'Import', icon: ImportIcon },
+    isBackOfficeAuth && { to: 'backoffice/dashboard', label: 'Dashboard', icon: DashboardIcon }
   ].filter(Boolean);
 
   return (
@@ -25,7 +27,7 @@ export default function SidebarLayout() {
         <div className="flex items-center gap-3 px-4 h-14 border-b border-neutral-800">
           {!collapsed && (
             <span className="text-sm font-semibold tracking-tight whitespace-nowrap">
-        
+
             </span>
           )}
           {collapsed && <span className="text-sm font-bold">D</span>}
@@ -45,7 +47,7 @@ export default function SidebarLayout() {
                 }`
               }
             >
-              {item.icon && <item.icon className="w-5 h-5" style={{ flexShrink: 0}}  />}
+              {item.icon && <item.icon className="w-5 h-5" style={{ flexShrink: 0 }} />}
               <p>&nbsp;</p>
               {!collapsed && <span className="whitespace-nowrap"> {item.label}</span>}
 
@@ -54,7 +56,7 @@ export default function SidebarLayout() {
           ))}
         </nav>
 
-  
+
 
         {/* Collapse */}
         <button

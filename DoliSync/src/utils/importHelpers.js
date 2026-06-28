@@ -166,6 +166,7 @@ export const RESOURCE_TYPES = {
       { key: "firstname", label: "Prénom", required: false, desc: "Prénom de l'employé" },
       { key: "password", label: "Mot de passe", required: false, desc: "Mot de passe initial" },
       { key: "gender", label: "Genre", required: false, desc: "Genre (homme/femme)" },
+      { key: "civility_code", label: "Civilité", required: false, desc: "Code civilité (ex: MR, MME)" },
       { key: "weeklyhours", label: "Heures / semaine", required: false, desc: "Heures travaillées" },
       { key: "ref_employe", label: "Référence Interne (ID)", required: false, desc: "ID de liaison unique" }
     ]
@@ -254,13 +255,28 @@ export async function importRow(resourceType, row, mapping, context = {}) {
     payload.lastname = getVal('lastname');
     payload.firstname = getVal('firstname');
     payload.password = getVal('password') || 'Dolibarr2026!';
+    payload.civility_code = getVal('civility_code');
     
-    // Map gender
+    // Map gender and infer civility if not specified
     const rawGender = getVal('gender').toLowerCase();
     if (rawGender === 'homme' || rawGender === 'man') {
       payload.gender = 'man';
+      if (!payload.civility_code) {
+        payload.civility_code = 'MR';
+        payload.civility_id = 1;
+      }
     } else if (rawGender === 'femme' || rawGender === 'woman') {
       payload.gender = 'woman';
+      if (!payload.civility_code) {
+        payload.civility_code = 'MME';
+        payload.civility_id = 2;
+      }
+    }
+
+    if (payload.civility_code === 'MR') {
+      payload.civility_id = 1;
+    } else if (payload.civility_code === 'MME') {
+      payload.civility_id = 2;
     }
 
     // Map weekly hours
@@ -282,7 +298,6 @@ export async function importRow(resourceType, row, mapping, context = {}) {
 
   else if (resourceType === 'salaries') {
     const refEmploye = getVal('ref_employe_salary');
-    // Look up Dolibarr user ID
     let fk_user = findUserByRef(context.users || [], refEmploye, context.employeeRefMap?.[refEmploye]);
     if (!fk_user) {
       throw new Error(`Aucun utilisateur Dolibarr trouvé pour la référence employé '${refEmploye}'`);
@@ -290,43 +305,44 @@ export async function importRow(resourceType, row, mapping, context = {}) {
 
     payload.fk_user = fk_user;
     payload.amount = parseNumber(getVal('amount'));
-    
-    // Add required label field
     payload.label = getVal('label') || `Salaire réf ${getVal('eref_salaire') || 'N/A'}`;
 
-    const toTimestamp = (dateStr) => {
+    // Convertit une date YYYY-MM-DD en timestamp Unix en tenant compte du
+    // fuseau horaire Madagascar (UTC+3, Indian/Antananarivo)
+    const toTimestampTZ = (dateStr) => {
       if (!dateStr) return null;
-      const d = new Date(dateStr);
+      // Forcer minuit heure locale Madagascar (UTC+3)
+      const d = new Date(`${dateStr}T00:00:00+03:00`);
       return isNaN(d.getTime()) ? null : Math.floor(d.getTime() / 1000);
     };
 
     const dateStart = parseCSVDate(getVal('date_debut'));
-    const dateEnd = parseCSVDate(getVal('date_fin'));
-    if (dateStart) payload.datesp = toTimestamp(dateStart);
-    if (dateEnd) payload.dateep = toTimestamp(dateEnd);
+    const dateEnd   = parseCSVDate(getVal('date_fin'));
+    if (dateStart) payload.datesp = toTimestampTZ(dateStart);
+    if (dateEnd)   payload.dateep = toTimestampTZ(dateEnd);
 
-    // Parse payments
+    // Analyse des paiements de la colonne "paiement"
     const rawPayments = getVal('paiement');
     const payments = parsePaiementField(rawPayments);
-    
-    if (payments.length > 0) {
-      // Use the first payment date as the salary payment date, or date_fin if unavailable
-      const payDate = parseCSVDate(payments[0].date);
-      if (payDate) {
-        payload.datep = toTimestamp(payDate);
-      }
-    }
-    
-    if (!payload.datep && dateEnd) {
-      payload.datep = toTimestamp(dateEnd);
-    }
 
-    // Store payments details and salary ref in note_private
+    // Calculer le montant total des paiements déclarés
+    const totalPaid = payments.reduce((a, p) => a + p.amount, 0);
+
+    // paye = 0 toujours à la création (Dolibarr met à jour paye via les payments)
+    // On stocke juste l'info pour la phase de paiement
+    payload.paye = 0;
+
+    // Stocker les détails de paiement et la ref dans note_private
     payload.note_private = JSON.stringify({
       eref_salaire: getVal('eref_salaire'),
-      payments: payments,
+      payments,
       raw_paiement: rawPayments
     });
+
+    // Exposer les payments et isFullyPaid pour la phase POST payments
+    payload._payments = payments;
+    payload._totalPaid = totalPaid;
+    payload._isFullyPaid = payments.length > 0 && Math.abs(totalPaid - payload.amount) < 0.01;
   }
 
   else if (resourceType === 'products') {
@@ -380,4 +396,89 @@ export async function importRow(resourceType, row, mapping, context = {}) {
     method: 'POST',
     body: payload
   });
+}
+
+/**
+ * Uploads a user photo (avatar) to Dolibarr using the documents API.
+ * @param {string|number} userId Dolibarr User ID
+ * @param {string} filename Name of the image file (e.g. "1.png")
+ * @param {string} base64Data Base64 encoded file content
+ * @returns {Promise<Object>} API response details
+ */
+export async function uploadUserPhoto(userId, filename, base64Data) {
+  const payload = {
+    filename,
+    modulepart: 'user',
+    ref: String(userId),
+    filecontent: base64Data,
+    fileencoding: 'base64',
+    overwriteifexists: 1
+  };
+  return await fetchDolData('/documents/upload', {
+    method: 'POST',
+    body: payload
+  });
+}
+
+/**
+ * Enregistre les paiements d'un salaire dans Dolibarr via POST /salaries/{id}/payments.
+ * Récupère automatiquement le premier compte bancaire disponible (champ `chid` obligatoire).
+ * La date est corrigée pour le fuseau horaire Madagascar (UTC+3).
+ *
+ * @param {string|number} salaryId  ID du salaire créé dans Dolibarr
+ * @param {Array<{date: string, amount: number}>} payments  Tableau des paiements parsés
+ * @returns {Promise<{posted: number, errors: string[]}>}
+ */
+export async function recordSalaryPayments(salaryId, payments, isFullyPaid = false) {
+  const results = { posted: 0, errors: [] };
+  if (!payments || payments.length === 0) return results;
+
+  // Récupérer le premier compte bancaire disponible (accountid, optionnel)
+  let accountid = null;
+  try {
+    const bankAccounts = await fetchDolData('/bankaccounts?limit=1');
+    const accounts = Array.isArray(bankAccounts) ? bankAccounts : [];
+    if (accounts.length > 0) {
+      accountid = parseInt(accounts[0].id || accounts[0].rowid);
+    }
+  } catch (e) {
+    results.errors.push(`Avertissement : Impossible de récupérer les comptes bancaires (${e.message}). Paiements sans compte bancaire.`);
+  }
+
+  for (const p of payments) {
+    const dateStr = parseCSVDate(p.date); // YYYY-MM-DD
+    if (!dateStr || isNaN(p.amount) || p.amount <= 0) continue;
+
+    try {
+      const body = {
+        chid: parseInt(salaryId),            // ID du salaire (obligatoire)
+        datepaye: dateStr,                    // string YYYY-MM-DD
+        amounts: { [String(salaryId)]: p.amount }, // { id_salaire: montant }
+        paiementtype: 0,
+      };
+      if (accountid) body.accountid = accountid;
+
+      await fetchDolData(`/salaries/${salaryId}/payments`, {
+        method: 'POST',
+        body
+      });
+      results.posted++;
+    } catch (err) {
+      results.errors.push(`Paiement du ${p.date} (${p.amount}) : ${err.message}`);
+    }
+  }
+
+  // Si tous les paiements couvrent le montant total → marquer paye=1 via PUT
+  if (isFullyPaid && results.posted > 0) {
+    try {
+      await fetchDolData(`/salaries/${salaryId}`, {
+        method: 'PUT',
+        body: { paye: 1 }
+      });
+    } catch (err) {
+      results.errors.push(`Impossible de marquer le salaire ${salaryId} comme payé : ${err.message}`);
+    }
+  }
+
+  return results;
 }

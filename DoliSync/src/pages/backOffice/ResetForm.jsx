@@ -4,23 +4,24 @@ import { H3, P, Button, Card, Alert } from '../../components/templates';
 
 export default function ResetForm({ onResetComplete }) {
   const tableGroups = [
-  {
-    category: "Ressources Humaines (GRH)",
-    tables: [
-      { label: "Salaires (Feuille 2)", endpoint: "salaries" },
-      { label: "Demandes de Congés", endpoint: "holidays" },
-      { label: "Notes de Frais", endpoint: "expensereports" },
-      { label: "Employés / Utilisateurs (Feuille 1)", endpoint: "users" },
-    ]
-  },
-  {
-    category: "Produits & Stocks",
-    tables: [
-      { label: "Produits", endpoint: "products" },
-      { label: "Entrepôts", endpoint: "warehouses" },
-    ]
-  }
-];
+    {
+      category: "Ressources Humaines (GRH)",
+      tables: [
+        { label: "Salaires (Feuille 2)", endpoint: "salaries" },
+        { label: "Salaires paiement", endpoint: "salaries/payments" },
+        { label: "Demandes de Congés", endpoint: "holidays" },
+        { label: "Notes de Frais", endpoint: "expensereports" },
+        { label: "Employés / Utilisateurs (Feuille 1)", endpoint: "users" },
+      ]
+    },
+    {
+      category: "Produits & Stocks",
+      tables: [
+        { label: "Produits", endpoint: "products" },
+        { label: "Entrepôts", endpoint: "warehouses" },
+      ]
+    }
+  ];
 
   const [selectedTables, setSelectedTables] = useState([]);
   const [isPurging, setIsPurging] = useState(false);
@@ -52,7 +53,7 @@ export default function ResetForm({ onResetComplete }) {
   const handleResetSubmit = async (e) => {
     e.preventDefault();
 
-    if (selectedTables.length === 0 ) {
+    if (selectedTables.length === 0) {
       alert("Veuillez selectionner au moins une table a reinitialiser.");
       return;
     }
@@ -75,12 +76,12 @@ export default function ResetForm({ onResetComplete }) {
       }
 
       // 2. Purge tables SQLite (Spring Boot) — table unifiée "couts"
-     
+
 
       alert(`Reinitialisation terminee.\n${deletedCount} element(s) supprime(s).`);
       if (onResetComplete) onResetComplete();
       setSelectedTables([]);
-     
+
 
     } catch (error) {
       alert(`Erreur lors de la reinitialisation : ${error.message}`);
@@ -100,7 +101,7 @@ export default function ResetForm({ onResetComplete }) {
           <div className="flex flex-col gap-6 mb-6">
             {tableGroups.map((group) => {
               const isGroupFullySelected = group.tables.length > 0 && group.tables.every(t => selectedTables.includes(t.endpoint));
-              
+
               return (
                 <div key={group.category} className="border border-neutral-200 rounded-lg p-4">
                   <div className="flex items-center justify-between mb-3 border-b border-neutral-100 pb-2">
@@ -139,7 +140,7 @@ export default function ResetForm({ onResetComplete }) {
 
           <Button
             type="submit"
-            disabled={isPurging || (selectedTables.length === 0 )}
+            disabled={isPurging || (selectedTables.length === 0)}
           >
             {isPurging ? 'Purge en cours...' : 'Vider les tables selectionnees'}
           </Button>

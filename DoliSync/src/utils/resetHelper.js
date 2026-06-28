@@ -4,6 +4,7 @@ export const purgeSelectedTables = async (endpoints, onProgress) => {
   let totalDeleted = 0;
 
   const priorityOrder = [
+    'salaries/payments',
     'salaries',
     'holidays',
     'expensereports',
@@ -53,7 +54,11 @@ export const purgeSelectedTables = async (endpoints, onProgress) => {
         }
 
         try {
-          await fetchDolData(`/${endpoint}/${itemId}`, {
+          const deleteUrl = endpoint === 'salaries/payments' 
+            ? `/salaries/${itemId}/payments` 
+            : `/${endpoint}/${itemId}`;
+
+          await fetchDolData(deleteUrl, {
             method: 'DELETE'
           });
 
