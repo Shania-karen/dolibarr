@@ -64,14 +64,14 @@ export default function CreateSalaire() {
     setError('');
     setSaving(true);
     try {
-      const toTs = (d) => Math.floor(new Date(`${d}T00:00:00+03:00`).getTime() / 1000);
+      
       const res = await fetchDolData('/salaries', {
         method: 'POST',
         body: {
           fk_user: +form.fk_user,
           amount:  +form.amount,
-          datesp:  toTs(form.datesp),
-          dateep:  toTs(form.dateep),
+          datesp:  form.datesp,
+          dateep:  form.dateep,
           label:   `Salaire ${form.datesp} — ${form.dateep}`,
           paye: 0,
         }
@@ -100,7 +100,9 @@ export default function CreateSalaire() {
           datepaye:    toTs(newPay.date),
           amounts:     { [salaryId]: +newPay.amount },
           paiementtype: 0,
-          chid,
+          chid:1,
+          accountid: 1,
+          fk_salary: salaryId
         }
       });
       const recorded = [...payments, { ...newPay }];
@@ -142,7 +144,9 @@ export default function CreateSalaire() {
           datepaye:    toTs(newPay.date),
           amounts:     { [selectedSal.id]: pAmount },
           paiementtype: 0,
-          chid,
+          chid:1,
+          accountid: 1,
+          fk_salary: selectedSal.id
         }
       });
 

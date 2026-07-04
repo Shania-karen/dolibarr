@@ -168,6 +168,7 @@ export const RESOURCE_TYPES = {
       { key: "gender", label: "Genre", required: false, desc: "Genre (homme/femme)" },
       { key: "civility_code", label: "Civilité", required: false, desc: "Code civilité (ex: MR, MME)" },
       { key: "weeklyhours", label: "Heures / semaine", required: false, desc: "Heures travaillées" },
+      { key: "poste", label: "Poste / Fonction", required: false, desc: "Intitulé du poste (ex: comptable, informaticien)" },
       { key: "ref_employe", label: "Référence Interne (ID)", required: false, desc: "ID de liaison unique" }
     ]
   },
@@ -181,7 +182,7 @@ export const RESOURCE_TYPES = {
       { key: "date_debut", label: "Date Début", required: false, desc: "Début de période" },
       { key: "date_fin", label: "Date Fin", required: false, desc: "Fin de période" },
       { key: "paiement", label: "Paiement (Détails)", required: false, desc: "Format: {[\"date\", montant]}" },
-      { key: "eref_salaire", label: "Réf Salaire", required: false, desc: "ID unique du salaire" }
+      { key: "ref_salaire", label: "Réf Salaire", required: false, desc: "ID unique du salaire" }
     ]
   },
   products: {
@@ -285,6 +286,12 @@ export async function importRow(resourceType, row, mapping, context = {}) {
       payload.weeklyhours = hours;
     }
 
+    // Poste / fonction
+    const poste = getVal('poste');
+    if (poste) {
+      payload.job = poste;
+    }
+
     // Mark as employee and active
     payload.employee = 1;
     payload.statut = 1;
@@ -305,14 +312,14 @@ export async function importRow(resourceType, row, mapping, context = {}) {
 
     payload.fk_user = fk_user;
     payload.amount = parseNumber(getVal('amount'));
-    payload.label = getVal('label') || `Salaire réf ${getVal('eref_salaire') || 'N/A'}`;
+    payload.label = getVal('label') || `Salaire réf ${getVal('ref_salaire') || 'N/A'}`;
 
-    // Convertit une date YYYY-MM-DD en timestamp Unix en tenant compte du
-    // fuseau horaire Madagascar (UTC+3, Indian/Antananarivo)
+    // Convertit une date YYYY-MM-DD en timestamp Unix (minuit UTC).
+    // Dolibarr stocke et restitue les dates en UTC : on passe minuit UTC
+    // pour éviter tout décalage d'un jour à l'affichage.
     const toTimestampTZ = (dateStr) => {
       if (!dateStr) return null;
-      // Forcer minuit heure locale Madagascar (UTC+3)
-      const d = new Date(`${dateStr}T00:00:00+03:00`);
+      const d = new Date(`${dateStr}T00:00:00Z`);
       return isNaN(d.getTime()) ? null : Math.floor(d.getTime() / 1000);
     };
 
@@ -334,7 +341,7 @@ export async function importRow(resourceType, row, mapping, context = {}) {
 
     // Stocker les détails de paiement et la ref dans note_private
     payload.note_private = JSON.stringify({
-      eref_salaire: getVal('eref_salaire'),
+      ref_salaire: getVal('ref_salaire'),
       payments,
       raw_paiement: rawPayments
     });
@@ -450,13 +457,17 @@ export async function recordSalaryPayments(salaryId, payments, isFullyPaid = fal
     if (!dateStr || isNaN(p.amount) || p.amount <= 0) continue;
 
     try {
+      // datepaye doit être un timestamp Unix (comme dans CreateSalaire.jsx)
+      const datepaye = Math.floor(new Date(`${dateStr}T00:00:00Z`).getTime() / 1000);
+
       const body = {
-        chid: parseInt(salaryId),            // ID du salaire (obligatoire)
-        datepaye: dateStr,                    // string YYYY-MM-DD
-        amounts: { [String(salaryId)]: p.amount }, // { id_salaire: montant }
+        datepaye,                                          // timestamp Unix
+        amounts: { [String(salaryId)]: p.amount },        // { id_salaire: montant }
         paiementtype: 0,
+        chid: accountid || 1,                             // ID compte bancaire
+        accountid: accountid || 1,                        // même valeur (requis par Dolibarr)
+        fk_salary: salaryId                               // lien explicite au salaire
       };
-      if (accountid) body.accountid = accountid;
 
       await fetchDolData(`/salaries/${salaryId}/payments`, {
         method: 'POST',

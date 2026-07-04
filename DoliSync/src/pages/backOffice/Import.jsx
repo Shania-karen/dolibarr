@@ -116,7 +116,7 @@ export default function ImportPage() {
         const { headers, data } = parseCSV(text);
 
         // Validate required headers
-        const required = ['eref_salaire', 'ref_employe', 'date_debut', 'date_fin', 'montant', 'paiement'];
+        const required = ['ref_salaire', 'ref_employe', 'date_debut', 'date_fin', 'montant', 'paiement'];
         const missing = required.filter(h => !headers.includes(h));
         if (missing.length > 0) {
           setUploadError(`Fichier Salaires invalide. Colonnes manquantes : ${missing.join(', ')}`);
@@ -282,6 +282,7 @@ export default function ImportPage() {
       gender: 'genre',
       password: 'mdp',
       weeklyhours: 'heure_travail_semaine',
+      poste: 'poste',          // → payload.job dans importRow
       ref_employe: 'ref_employe'
     };
 
@@ -389,7 +390,7 @@ export default function ImportPage() {
       date_debut: 'date_debut',
       date_fin: 'date_fin',
       paiement: 'paiement',
-      eref_salaire: 'eref_salaire'
+      ref_salaire: 'ref_salaire'
     };
 
     // Combine local newly created users with fetched users
@@ -602,7 +603,7 @@ export default function ImportPage() {
                   ) : (
                     <div>
                       <p className="text-sm font-medium text-neutral-850">Glissez le CSV des Salaires ici</p>
-                      <p className="text-xs text-neutral-400 mt-1">Modèle attendu : eref_salaire, ref_employe...</p>
+                      <p className="text-xs text-neutral-400 mt-1">Modèle attendu : ref_salaire, ref_employe...</p>
                     </div>
                   )}
                 </div>

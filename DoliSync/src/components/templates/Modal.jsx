@@ -14,7 +14,7 @@ export default function Modal({ title, open, onClose, className = '', children }
       onClick={onClose}
     >
       <div
-        className={`bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[85vh] overflow-hidden animate-[slideUp_250ms_ease] ${className}`}
+        className={`bg-white rounded-2xl shadow-xl w-full max-w-xl max-h-[85vh] overflow-y-auto animate-[slideUp_250ms_ease] ${className}`}
         onClick={e => e.stopPropagation()}
       >
         <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100">

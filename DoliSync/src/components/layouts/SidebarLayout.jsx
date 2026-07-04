@@ -9,11 +9,14 @@ export default function SidebarLayout() {
   const isBackOfficeAuth = sessionStorage.getItem('isBackOfficeAuth') === 'true';
 
   const navItems = [
-    { to: '/', label: 'Home', icon: HomeIcon },
+    { to: '/', label: 'Accueil', icon: HomeIcon },
     { to: '/salaires', label: 'Salaires', icon: MoneyIcon },
-    isBackOfficeAuth && { to: 'backoffice', label: 'Reset', icon: ResetIcon },
+    isBackOfficeAuth && { to: 'backoffice', label: 'Renitialisation', icon: ResetIcon },
     isBackOfficeAuth && { to: 'backoffice/import', label: 'Import', icon: ImportIcon },
-    isBackOfficeAuth && { to: 'backoffice/dashboard', label: 'Dashboard', icon: DashboardIcon }
+    isBackOfficeAuth && { to: 'backoffice/dashboard', label: 'Tableau de bord', icon: DashboardIcon },
+    isBackOfficeAuth && { to: 'holidays', label: 'Jour férié' },
+    isBackOfficeAuth && { to: 'employee', label: 'Salaire multiple' },
+    isBackOfficeAuth && { to: 'employeDetail', label: 'Employés' }
   ].filter(Boolean);
 
   return (

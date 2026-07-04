@@ -4,8 +4,9 @@ const API = 'http://localhost:8080/dolibarr/api/index.php';
 const KEY = { headers: { 'DOLAPIKEY': 'a31031ec9f9fac9ae7d484c24a4b8cf78a5a8aaf' } };
 const euro = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR' }).format(n);
 const sum  = (arr) => arr.reduce((a, s) => a + parseFloat(s.amount || 0), 0);
+// ymOf : extrait YYYY-MM depuis le timestamp de début de salaire (datesp)
 const ymOf = (s) => {
-  const ts = parseInt(s.datep);
+  const ts = parseInt(s.datesp);
   if (!ts) return null;
   const d = new Date(ts * 1000);
   return isNaN(d.getTime()) ? null : `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
@@ -95,28 +96,11 @@ export default function Dashboard() {
 
       const processedSalaries = salariesData.map(sal => {
         const salPayments = paymentsData.filter(pay => String(pay.fk_salary) === String(sal.id));
-        let latestDatep = null;
-        if (salPayments.length > 0) {
-          const timestamps = salPayments
-            .map(pay => {
-              const val = pay.datepaye || pay.date || pay.datep;
-              if (!val) return null;
-              if (typeof val === 'number') return val;
-              if (typeof val === 'string') {
-                if (/^\d+$/.test(val)) return parseInt(val);
-                const d = new Date(val);
-                return isNaN(d.getTime()) ? null : Math.floor(d.getTime() / 1000);
-              }
-              return null;
-            })
-            .filter(t => t !== null && !isNaN(t) && t > 0);
-          if (timestamps.length > 0) {
-            latestDatep = Math.max(...timestamps);
-          }
-        }
+        const totalPaid = salPayments.reduce((a, pay) => a + parseFloat(pay.amount || 0), 0);
         return {
           ...sal,
-          datep: latestDatep || sal.datep || null
+          totalPaid,
+          // datesp est déjà présent dans sal, on le conserve pour le filtre ymOf
         };
       });
 
