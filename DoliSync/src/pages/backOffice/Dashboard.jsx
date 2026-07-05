@@ -80,6 +80,7 @@ export default function Dashboard() {
   const [users, setUsers]       = useState([]);
   const [yearFilter, setYearFilter]   = useState('all');
   const [monthFilter, setMonthFilter] = useState('all');
+  const [genderFilter, setGenderFilter] = useState('all');
 
   useEffect(() => {
     Promise.all([
@@ -149,21 +150,26 @@ export default function Dashboard() {
           <div className="flex flex-wrap items-center gap-3">
             <FilterSelect label="Année" value={yearFilter} onChange={e=>{setYearFilter(e.target.value);setMonthFilter('all');}} options={availableYears.map(y=>({v:y,l:y}))} allLabel="Toutes"/>
             <FilterSelect label="Mois"  value={monthFilter} onChange={e=>setMonthFilter(e.target.value)} options={availableMonths.map(ym=>({v:ym,l:ymLabel(ym)}))} allLabel="Tous"/>
+            <FilterSelect label="Genre" value={genderFilter} onChange={e=>setGenderFilter(e.target.value)} options={[{v:'homme',l:'Hommes'}, {v:'femme',l:'Femmes'}]} allLabel="Tous"/>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <GenderBlock label="Hommes" salaires={hommes} users={users} accent="text-blue-600" bg="bg-blue-50"/>
-          <GenderBlock label="Femmes" salaires={femmes} users={users} accent="text-pink-600" bg="bg-pink-50"/>
+        <div className={`grid gap-6 ${genderFilter === 'all' ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+          {(genderFilter === 'all' || genderFilter === 'homme') && (
+            <GenderBlock label="Hommes" salaires={hommes} users={users} accent="text-blue-600" bg="bg-blue-50"/>
+          )}
+          {(genderFilter === 'all' || genderFilter === 'femme') && (
+            <GenderBlock label="Femmes" salaires={femmes} users={users} accent="text-pink-600" bg="bg-pink-50"/>
+          )}
         </div>
 
         {monthFilter !== 'all' && (
           <div className="mt-4 p-4 bg-white border border-gray-100 rounded-xl shadow-sm flex flex-wrap gap-6">
             {[
               { label: 'Période',           val: ymLabel(monthFilter), cls: 'text-gray-700' },
-              { label: 'Total hommes',      val: euro(sum(hommes)),    cls: 'text-blue-600'  },
-              { label: 'Total femmes',      val: euro(sum(femmes)),    cls: 'text-pink-600'  },
-              { label: 'Masse totale',      val: euro(sum(filtered)),  cls: 'text-gray-800'  },
+              ...(genderFilter === 'all' || genderFilter === 'homme' ? [{ label: 'Total hommes',      val: euro(sum(hommes)),    cls: 'text-blue-600'  }] : []),
+              ...(genderFilter === 'all' || genderFilter === 'femme' ? [{ label: 'Total femmes',      val: euro(sum(femmes)),    cls: 'text-pink-600'  }] : []),
+              { label: 'Masse totale',      val: euro(sum(filtered.filter(s => genderFilter === 'all' || gender(s) === genderFilter))),  cls: 'text-gray-800'  },
             ].map(({label, val, cls}) => (
               <div key={label}>
                 <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</span>

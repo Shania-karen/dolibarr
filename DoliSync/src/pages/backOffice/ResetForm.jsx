@@ -10,6 +10,7 @@ export default function ResetForm({ onResetComplete }) {
         { label: "Salaires (Feuille 2)", endpoint: "salaries" },
         { label: "Salaires paiement", endpoint: "salaries/payments" },
         { label: "Demandes de Congés", endpoint: "holidays" },
+        { label: "Jours Fériés", endpoint: "holidayPublic" },
         { label: "Notes de Frais", endpoint: "expensereports" },
         { label: "Employés / Utilisateurs (Feuille 1)", endpoint: "users" },
       ]

@@ -308,10 +308,10 @@ export default function ImportPage() {
           addLog(`[Employé] Ligne ${rowNum} : '${row['nom']}' existe déjà (ID Dolibarr: ${existingUserId}). Liaison effectuée.`, 'success');
 
           // Associated photo upload
-          if (photosData[refEmp] && !skipPhotoUploads) {
+          if (photosData[rowNum] && !skipPhotoUploads) {
             try {
               addLog(`[Photo] Association de la photo pour '${row['nom']}'...`, 'info');
-              await uploadUserPhoto(existingUserId, photosData[refEmp].filename, photosData[refEmp].filecontent);
+              await uploadUserPhoto(existingUserId, photosData[rowNum].filename, photosData[rowNum].filecontent);
               addLog(`[Photo] Photo associée avec succès pour '${row['nom']}'.`, 'success');
             } catch (photoErr) {
               if (photoErr.message.includes("not implemented yet") || photoErr.message.includes("Modulepart")) {
@@ -336,10 +336,10 @@ export default function ImportPage() {
             addLog(`[Employé] Ligne ${rowNum} : '${row['nom']}' créé avec succès (ID Dolibarr: ${parsedUserId})`, 'success');
 
             // Associated photo upload
-            if (photosData[refEmp] && !skipPhotoUploads) {
+            if (photosData[rowNum] && !skipPhotoUploads) {
               try {
                 addLog(`[Photo] Association de la photo pour '${row['nom']}'...`, 'info');
-                await uploadUserPhoto(newUserId, photosData[refEmp].filename, photosData[refEmp].filecontent);
+                await uploadUserPhoto(newUserId, photosData[rowNum].filename, photosData[rowNum].filecontent);
                 addLog(`[Photo] Photo associée avec succès pour '${row['nom']}'.`, 'success');
               } catch (photoErr) {
                 if (photoErr.message.includes("not implemented yet") || photoErr.message.includes("Modulepart")) {
@@ -702,7 +702,7 @@ export default function ImportPage() {
                   <tbody>
                     {(showAllEmployees ? employeesData : employeesData.slice(0, 10)).map((row, idx) => {
                       const refEmp = row['ref_employe'];
-                      const photoInfo = photosData[refEmp];
+                      const photoInfo = photosData[idx + 1];
                       const rawGender = (row['genre'] || '').toLowerCase();
                       const deducedCivility = (rawGender === 'homme' || rawGender === 'man') ? 'MR' : 
                                               (rawGender === 'femme' || rawGender === 'woman') ? 'MME' : 'N/A';

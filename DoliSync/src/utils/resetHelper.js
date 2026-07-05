@@ -7,6 +7,7 @@ export const purgeSelectedTables = async (endpoints, onProgress) => {
     'salaries/payments',
     'salaries',
     'holidays',
+    'holidayPublic',
     'expensereports',
     'products',
     'warehouses',
@@ -30,12 +31,21 @@ export const purgeSelectedTables = async (endpoints, onProgress) => {
 
   for (const endpoint of sortedEndpoints) {
     try {
-      
-      const rawItems = await fetchDolData(`/${endpoint}?limit=1000&sortfield=t.rowid&sortorder=ASC`, { 
-        method: 'GET' 
-      });
-      
-      const items = Array.isArray(rawItems) ? rawItems : [];
+      let items = [];
+      if (endpoint === 'holidayPublic') {
+        const response = await fetch('/api/holidayPublic');
+        if (response.ok) {
+          const rawItems = await response.json();
+          items = Array.isArray(rawItems) ? rawItems : [];
+        } else {
+          throw new Error(`Erreur lors de la lecture de holidayPublic`);
+        }
+      } else {
+        const rawItems = await fetchDolData(`/${endpoint}?limit=1000&sortfield=t.rowid&sortorder=ASC`, { 
+          method: 'GET' 
+        });
+        items = Array.isArray(rawItems) ? rawItems : [];
+      }
 
       if (items.length === 0) {
         console.log(`Aucune donnée à supprimer dans ${endpoint}.`);
@@ -47,20 +57,28 @@ export const purgeSelectedTables = async (endpoints, onProgress) => {
       await runInBatches(items, 10, async (item) => {
         const itemId = item.id;
 
-       
         if (endpoint === 'users' && (itemId === 1 || itemId === "1" || item.admin === "1")) {
           console.warn("Purge : Évitement de la suppression du compte Administrateur principal.");
           return;
         }
 
         try {
-          const deleteUrl = endpoint === 'salaries/payments' 
-            ? `/salaries/${itemId}/payments` 
-            : `/${endpoint}/${itemId}`;
+          if (endpoint === 'holidayPublic') {
+            const deleteRes = await fetch(`/api/holidayPublic/${itemId}`, {
+              method: 'DELETE'
+            });
+            if (!deleteRes.ok) {
+              throw new Error(`Erreur delete holidayPublic status ${deleteRes.status}`);
+            }
+          } else {
+            const deleteUrl = endpoint === 'salaries/payments' 
+              ? `/salaries/${itemId}/payments` 
+              : `/${endpoint}/${itemId}`;
 
-          await fetchDolData(deleteUrl, {
-            method: 'DELETE'
-          });
+            await fetchDolData(deleteUrl, {
+              method: 'DELETE'
+            });
+          }
 
           localDeleted++;
           totalDeleted++;
@@ -70,7 +88,6 @@ export const purgeSelectedTables = async (endpoints, onProgress) => {
           }
         } catch (err) {
           console.error(`Échec de la suppression de l'ID ${itemId} dans ${endpoint}`, err);
-          
         }
       });
 

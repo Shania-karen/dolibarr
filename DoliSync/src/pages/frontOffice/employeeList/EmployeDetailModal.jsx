@@ -11,13 +11,17 @@ const euro = (n) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency
 export default function SalaireMultipleModal({ user, onClose }) {
   const [salarieUser, setSalarieUser] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [photoUrl, setPhotoUrl] = useState(null);
+  const [loadingPhoto, setLoadingPhoto] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
+    setLoadingPhoto(true);
     Promise.all([
       fetchDolData('/salaries?limit=1000'),
       fetchDolData('/salaries/payments?limit=1000'),
-    ]).then(([s, p]) => {
+      fetchDolData(`/documents?modulepart=user&id=${user.id}`).catch(() => [])
+    ]).then(([s, p, docs]) => {
       const salariesData = Array.isArray(s) ? s : [];
       const paymentsData = Array.isArray(p) ? p : [];
 
@@ -29,8 +33,43 @@ export default function SalaireMultipleModal({ user, onClose }) {
       const filteredPayments = paymentsData.filter(pay => userSalaryIds.includes(pay.fk_salary));
       setPayments(filteredPayments);
       console.log("Paiements récupérés:", filteredPayments);
+
+      console.log("Docs récupérés pour l'employé:", docs);
+      const docsList = Array.isArray(docs) ? docs : (docs && Array.isArray(docs.data) ? docs.data : []);
+      const imageDoc = docsList.find(d => {
+        const fileName = d.relativename || d.name;
+        return fileName && /\.(png|jpe?g)$/i.test(fileName);
+      });
+      if (imageDoc) {
+        let originalFile = imageDoc.relativename || imageDoc.name;
+        if (!originalFile.startsWith(`${user.id}/`)) {
+          originalFile = `${user.id}/${originalFile}`;
+        }
+        console.log("Téléchargement de la photo:", originalFile);
+        fetchDolData(`/documents/download?modulepart=user&original_file=${encodeURIComponent(originalFile)}`)
+          .then(res => {
+            if (res && res.content) {
+              const mimeType = res['content-type'] || 'image/png';
+              console.log("Photo téléchargée avec succès. MimeType:", mimeType);
+              setPhotoUrl(`data:${mimeType};base64,${res.content}`);
+            } else {
+              console.warn("Réponse de téléchargement sans contenu:", res);
+            }
+          })
+          .catch(err => {
+            console.error("Erreur téléchargement photo:", err);
+          })
+          .finally(() => setLoadingPhoto(false));
+      } else {
+        console.log("Aucune photo trouvée pour cet employé dans la liste des documents.");
+        setLoadingPhoto(false);
+      }
     });
   }, [user.id]);
+
+  const totalSalaries = salarieUser.reduce((acc, s) => acc + parseFloat(s.amount || 0), 0);
+  const totalPaid = payments.reduce((acc, p) => acc + parseFloat(p.amount || 0), 0);
+  const resteAPayer = Math.max(0, totalSalaries - totalPaid);
 
   return (
     <Modal onClose={onClose} open={true}>
@@ -44,10 +83,36 @@ export default function SalaireMultipleModal({ user, onClose }) {
           <Card>
             <Card.Body className="space-y-4">
               <H3>Information Personnelle</H3>
-              <div><span>Nom: {user.firstname || "Sans Nom"}</span></div>
-              <div><span>Prénom: {user.lastname || "Sans Prénom"}</span></div>
-              <div><span>Heures de travail: {user.weeklyhours || "0"}h</span></div>
-              <div><span>Poste: {user.job || "Aucun"}</span></div>
+              <div className="flex flex-col sm:flex-row gap-6 items-start">
+                {/* Photo container on the left */}
+                <div className="flex-shrink-0">
+                  {photoUrl ? (
+                    <img
+                      src={photoUrl}
+                      alt="Avatar"
+                      className="w-20 h-20 rounded-full object-cover border border-neutral-200 shadow-sm"
+                    />
+                  ) : loadingPhoto ? (
+                    <div className="w-20 h-20 rounded-full border border-dashed border-neutral-200 flex items-center justify-center bg-neutral-50">
+                      <span className="text-[10px] text-neutral-400">Chargement...</span>
+                    </div>
+                  ) : (
+                    <div className="w-20 h-20 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-400 border border-neutral-200 shadow-inner">
+                      <span className="text-2xl font-bold">
+                        {user.firstname?.[0]?.toUpperCase() || user.lastname?.[0]?.toUpperCase() || '?'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Details on the right */}
+                <div className="space-y-2">
+                  <div><span>Nom: {user.firstname || "Sans Nom"}</span></div>
+                  <div><span>Prénom: {user.lastname || "Sans Prénom"}</span></div>
+                  <div><span>Heures de travail: {user.weeklyhours || "0"}h</span></div>
+                  <div><span>Poste: {user.job || "Aucun"}</span></div>
+                </div>
+              </div>
             </Card.Body>
 
             <H3>Historique des salaires</H3>
@@ -81,7 +146,6 @@ export default function SalaireMultipleModal({ user, onClose }) {
                   <Th>Lié au salaire</Th>
                   <Th>Date Paiement</Th>
                   <Th>Montant Payé</Th>
-                  <Th>Reste à payer</Th>
                 </Tr>
               </thead>
               <tbody>
@@ -103,12 +167,12 @@ export default function SalaireMultipleModal({ user, onClose }) {
                       <Td>#{pay.fk_salary}</Td>
                       <Td>{tsDate(pay.datep)}</Td>
                       <Td>{euro(montantVerse)}</Td>
-                      <Td>{euro(reste)}</Td>
                     </Tr>
                   );
                 })}
               </tbody>
             </Table>
+            <H3>Reste à payer : <span>{euro(resteAPayer)}</span></H3>
           </Card>
         )}
       </div>
